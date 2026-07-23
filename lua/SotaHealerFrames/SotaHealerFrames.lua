@@ -7,7 +7,7 @@
 --.author Ludiusvox
 --.version 1.0
 --.description Advanced 4x3 cubic healer frames for 12-man raids.
---.icon SotaHealerFrames.png
+--.icon SotaHealerFrames/SotaHealerFrames.png
 
 local ScriptName = "SotA Healer Frames";
 local Version = "1.0";
@@ -392,8 +392,8 @@ function DrawLegend()
         startY = screenHeight / 2 - 130
     end
 
-    local legendW = 200 -- Increased from 180
-    local legendH = 360 -- Adjusted for new spacing
+    local legendW = 220 -- Increased from 200
+    local legendH = 360
 
     -- Main Legend Container
     if ShroudGUIBox then
