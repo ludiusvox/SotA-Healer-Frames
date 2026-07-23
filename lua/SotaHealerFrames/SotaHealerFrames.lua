@@ -7,6 +7,7 @@
 --.author Ludiusvox
 --.version 1.0
 --.description Advanced 4x3 cubic healer frames for 12-man raids.
+--.icon SotaHealerFrames.png
 
 local ScriptName = "SotA Healer Frames";
 local Version = "1.0";
