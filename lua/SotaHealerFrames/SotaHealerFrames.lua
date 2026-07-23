@@ -7,7 +7,7 @@
 --.author Ludiusvox
 --.version 1.0
 --.description Advanced 4x3 cubic healer frames for 12-man raids.
---.icon SotaHealerFrames/SotaHealerFrames.png
+--.icon SotaHealerFrames.png
 
 local ScriptName = "SotA Healer Frames";
 local Version = "1.0";
@@ -392,8 +392,8 @@ function DrawLegend()
         startY = screenHeight / 2 - 130
     end
 
-    local legendW = 180
-    local legendH = 260
+    local legendW = 200 -- Increased from 180
+    local legendH = 360 -- Adjusted for new spacing
 
     -- Main Legend Container
     if ShroudGUIBox then
@@ -406,7 +406,7 @@ function DrawLegend()
     end
 
     local function drawEntry(idx, color, text, subtext)
-        local y = startY + 40 + (idx * 35) -- Increased spacing from 28 to 35
+        local y = startY + 45 + (idx * 38) -- Increased vertical spacing from 35 to 38
 
         if ShroudGUILabel then
             -- Icon with "CSS-like" shadow effect using two labels
@@ -416,7 +416,8 @@ function DrawLegend()
             -- Text labels
             ShroudGUILabel(startX + 35, y, legendW - 45, 20, "<b>" .. text .. "</b>")
             if subtext then
-                ShroudGUILabel(startX + 35, y + 15, legendW - 45, 15, "<size=10><color=#CCCCCC>" .. subtext .. "</color></size>")
+                -- Increased spacing to subtext and width for long descriptions
+                ShroudGUILabel(startX + 35, y + 16, legendW - 40, 18, "<size=10><color=#CCCCCC>" .. subtext .. "</color></size>")
             end
         end
     end
@@ -425,21 +426,18 @@ function DrawLegend()
     drawEntry(0, config.colors.soothingRain, "Soothing Rain", "32s - Top Left")
     drawEntry(1, config.colors.digIn, "Dig In", "Aura - Top Right")
     drawEntry(2, config.colors.torpor, "Torpor", "Regen - Bottom Left")
-    drawEntry(3, config.colors.knightsGrace, "Knight's Grace", "Corner Highlight")
+    drawEntry(3, config.colors.knightsGrace, "Knight's Grace", "Personal Highlight")
 
     -- Debuff Section
     if ShroudGUILabel then
-        ShroudGUILabel(startX + 10, startY + 185, legendW - 20, 2, "<color=#555555>_____________________</color>")
+        ShroudGUILabel(startX + 10, startY + 195, legendW - 20, 2, "<color=#555555>________________________</color>")
     end
-    drawEntry(5.5, config.colors.blind, "Blindness", "Yellow - High Priority")
-    drawEntry(6.5, config.colors.douse, "Fire Damage", "Light Red - Douse!")
-    drawEntry(7.5, config.colors.debuffGeneral, "General Debuff", "Dark Red - CC/Other")
+    drawEntry(5.2, config.colors.blind, "Blindness", "Yellow - High Priority")
+    drawEntry(6.2, config.colors.douse, "Fire Damage", "Light Red - Douse!")
+    drawEntry(7.2, config.colors.debuffGeneral, "General Debuff", "Dark Red - CC/Other")
 
     -- New entry for Healing Grace
-    drawEntry(8.5, config.colors.healingGrace, "Healing Grace", "Light Green - Bottom Right")
-
-    -- Adjust Legend Height
-    legendH = 340
+    drawEntry(8.2, config.colors.healingGrace, "Healing Grace", "Light Green - Bottom Right")
 end
 
 function DrawQuestTicker()
@@ -480,7 +478,8 @@ end
 -- [[ CHAT INTERCEPTION & PARSING ]]
 
 function ProcessIncomingChat(channel, sender, message)
-    local entry = { sender = sender, message = message, time = ShroudGetTime() }
+    local now = ShroudTime or 0
+    local entry = { sender = sender, message = message, time = now }
 
     -- Buff Tracking (Parsing)
     -- Pattern: "PlayerName is now under the effect of BuffName."
@@ -493,7 +492,7 @@ function ProcessIncomingChat(channel, sender, message)
 
     if pName and bName and BUFF_META[bName] then
         if not globalTrackedBuffs[pName] then globalTrackedBuffs[pName] = {} end
-        globalTrackedBuffs[pName][bName] = ShroudGetTime() + BUFF_META[bName].duration
+        globalTrackedBuffs[pName][bName] = now + BUFF_META[bName].duration
     end
 
     -- Loss of Buff
@@ -517,7 +516,7 @@ function ProcessIncomingChat(channel, sender, message)
 
     -- Quest Parsing (Task Complete / Updated)
     if message:find("Task Complete") or message:find("Quest Updated") or message:find("Journal Updated") then
-        table.insert(questJournal, { text = message, time = ShroudGetTime() })
+        table.insert(questJournal, { text = message, time = now })
         if #questJournal > 20 then table.remove(questJournal, 1) end
     end
 end
