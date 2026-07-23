@@ -59,11 +59,11 @@ local myName = ""
 
 -- Buff Metadata
 local BUFF_META = {
-    ["Soothing Rain"] = { duration = 32, color = config.colors.soothingRain },
-    ["Knight's Grace"] = { duration = 30, color = config.colors.knightsGrace },
-    ["Dig In"] = { duration = 20, color = config.colors.digIn },
-    ["Torpor"] = { duration = 30, color = config.colors.torpor },
-    ["Healing Grace"] = { duration = 20, color = config.colors.healingGrace },
+    ["Soothing Rain"] = { duration = 32, color = config.colors.soothingRain, phrase = "Quaes-Wast-Vatu" },
+    ["Knight's Grace"] = { duration = 30, color = config.colors.knightsGrace }, -- Combat Skill (No Phrase)
+    ["Dig In"] = { duration = 20, color = config.colors.digIn },              -- Combat Skill (No Phrase)
+    ["Torpor"] = { duration = 30, color = config.colors.torpor, phrase = "Asen-Terra" },
+    ["Healing Grace"] = { duration = 20, color = config.colors.healingGrace, phrase = "In-Reno" },
     -- Debuffs (Tracked via Chat)
     ["Burning"] = { duration = 15, isDebuff = true, color = config.colors.douse },
     ["Fire Arrow"] = { duration = 10, isDebuff = true, color = config.colors.douse },
@@ -71,6 +71,14 @@ local BUFF_META = {
     ["Blind"] = { duration = 8, isDebuff = true, color = config.colors.blind },
     ["Stunned"] = { duration = 4, isDebuff = true, color = config.colors.debuffGeneral },
     ["Rooted"] = { duration = 6, isDebuff = true, color = config.colors.debuffGeneral }
+}
+
+-- Phrase Mapping (Magic Words -> Buff Name)
+local PHRASE_TO_BUFF = {
+    ["Desen-Vatu"] = "Douse",
+    ["Quaes-Wast-Vatu"] = "Soothing Rain",
+    ["Asen-Terra"] = "Torpor",
+    ["In-Reno"] = "Healing Grace"
 }
 
 -- [[ CALLBACKS ]]
@@ -167,33 +175,39 @@ function UpdatePartyData()
     local count = 0
     if ShroudGetPartyMemberCount then count = ShroudGetPartyMemberCount() end
 
-    -- We want a fixed 12-slot array where the player is in a central "Power Spot"
-    local playerSlot = 6
-
-    -- Collect all party members including self
     local members = {}
 
-    -- Local Player Data (Modern R151 IDs)
+    -- 1. Local Player Data
+    local myBuffs = {}
+    if ShroudGetBuffCount then
+        for i = 0, ShroudGetBuffCount() - 1 do
+            local bName = ShroudGetBuffName(i)
+            if bName then myBuffs[bName] = true end
+        end
+    end
+
     local myData = {
         name = myName,
-        hp = GetMyStat(14) or 0,    -- Current Health
-        maxHp = GetMyStat(30) or 1, -- Max Health
-        focus = GetMyStat(13) or 0, -- Current Focus
-        maxFocus = GetMyStat(27) or 1 -- Max Focus
+        hp = GetMyStat(14) or 0,
+        maxHp = GetMyStat(30) or 1,
+        focus = GetMyStat(13) or 0,
+        maxFocus = GetMyStat(27) or 1,
+        buffs = myBuffs
     }
 
-    -- Try modern R151 API for others
+    -- 2. Party Members (Modern R151 API with Buffs support)
     if count > 0 then
         for i = 1, count do
             local name = nil
             if ShroudGetPartyMemberName then name = ShroudGetPartyMemberName(i) end
 
             if name and name ~= "" and name ~= "None" then
-                -- Check if it's the local player (normalize names to catch titles)
+                -- Normalize names for comparison
                 local isSelf = (name == myName) or name:find(myName) or myName:find(name)
 
                 if not isSelf then
                     local hp, maxHp, focus, maxFocus = 0, 1, 0, 1
+                    local pBuffs = {}
 
                     -- Check for new R151 ShroudGetPartyMemberData
                     if ShroudGetPartyMemberData then
@@ -204,6 +218,13 @@ function UpdatePartyData()
                             maxHp = data.MaxHealth or 1
                             focus = data.Focus or 0
                             maxFocus = data.MaxFocus or 1
+
+                            -- Extract Buffs from the new R151 table
+                            if data.Buffs then
+                                for _, b in ipairs(data.Buffs) do
+                                    if b.name then pBuffs[b.name] = true end
+                                end
+                            end
                         end
                     elseif ShroudGetPartyMemberStat then
                         hp = ShroudGetPartyMemberStat(i, 14) or 0
@@ -218,18 +239,18 @@ function UpdatePartyData()
                         maxHp = maxHp,
                         focus = focus,
                         maxFocus = maxFocus,
-                        buffs = globalTrackedBuffs[name] or {}
+                        buffs = pBuffs
                     })
                 end
             end
         end
     end
 
+    local playerSlot = 6
     local memberIdx = 1
     for i = 1, 12 do
         if i == playerSlot then
             partyData[i] = myData
-            partyData[i].buffs = globalTrackedBuffs[myName] or {}
         elseif memberIdx <= #members then
             partyData[i] = members[memberIdx]
             memberIdx = memberIdx + 1
@@ -503,21 +524,40 @@ function ProcessIncomingChat(channel, sender, message)
     local now = ShroudTime or 0
     local entry = { sender = sender, message = message, time = now }
 
-    -- Buff Tracking (Parsing)
-    -- Broadening patterns to catch various system message formats
-    local pName, bName = message:match("^(.-) is now under the effect of (.-)%.")
-    if not pName then pName, bName = message:match("^(.-) is now affected by (.-)%.") end
-
-    if not pName then
-        bName = message:match("^You are now under the effect of (.-)%.")
-        if not bName then bName = message:match("^You are now affected by (.-)%.") end
-        if bName then pName = myName end
+    -- 1. Magic Phrase Tracking (Words of Power)
+    -- Pattern: "Player Name utters the phrase Magic-Words."
+    local pName, phrase = message:match("^(.-) utters the phrase (.-)%.")
+    if pName and phrase then
+        local bName = PHRASE_TO_BUFF[phrase]
+        if bName then
+            -- Special handling for Douse (Clear Fire Debuffs)
+            if bName == "Douse" then
+                if globalTrackedBuffs[pName] then
+                    globalTrackedBuffs[pName]["Burning"] = nil
+                    globalTrackedBuffs[pName]["Fire Arrow"] = nil
+                end
+            elseif BUFF_META[bName] then
+                if not globalTrackedBuffs[pName] then globalTrackedBuffs[pName] = {} end
+                globalTrackedBuffs[pName][bName] = now + BUFF_META[bName].duration
+            end
+        end
     end
 
-    if pName and bName and BUFF_META[bName] then
-        if not globalTrackedBuffs[pName] then globalTrackedBuffs[pName] = {} end
-        globalTrackedBuffs[pName][bName] = now + BUFF_META[bName].duration
-        -- ShroudLog("Buff Detected: " .. bName .. " on " .. pName) -- Debug
+    -- 2. Standard Buff/Debuff Tracking (Parsing)
+    -- Broadening patterns to catch various system message formats
+    local pName2, bName2 = message:match("^(.-) is now under the effect of (.-)%.")
+    if not pName2 then pName2, bName2 = message:match("^(.-) is now affected by (.-)%.") end
+
+    if not pName2 then
+        bName2 = message:match("^You are now under the effect of (.-)%.")
+        if not bName2 then bName2 = message:match("^You are now affected by (.-)%.") end
+        if bName2 then pName2 = myName end
+    end
+
+    if pName2 and bName2 and BUFF_META[bName2] then
+        if not globalTrackedBuffs[pName2] then globalTrackedBuffs[pName2] = {} end
+        globalTrackedBuffs[pName2][bName2] = now + BUFF_META[bName2].duration
+        -- ShroudLog("Buff Detected: " .. bName2 .. " on " .. pName2) -- Debug
     end
 
     -- Loss of Buff
