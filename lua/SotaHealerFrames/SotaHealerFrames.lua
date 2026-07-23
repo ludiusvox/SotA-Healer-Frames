@@ -36,6 +36,7 @@ local config = {
         hpLow  = "#FF0000B2", -- 70% opacity red
         focus = "#0000FFB2",
         bg = "#222222FF",
+        hpEmpty = "#111111B2", -- Very dark for empty health
         soothingRain = "#00CCFF",
         knightsGrace = "#FFD700",
         digIn = "#C0C0C0",
@@ -227,7 +228,11 @@ function UpdatePartyData()
                             -- Extract Buffs from the new R151 table
                             if data.Buffs then
                                 for _, b in ipairs(data.Buffs) do
-                                    if b.name then pBuffs[b.name] = true end
+                                    local bName = b.name or b.Name
+                                    if bName then
+                                        pBuffs[bName] = true
+                                        -- ShroudLog("DEBUG: Detected Buff " .. bName .. " on " .. name)
+                                    end
                                 end
                             end
                         end
@@ -316,14 +321,15 @@ function DrawRaidFrames()
 
         local member = partyData[i]
 
-        -- Main Frame Square (Clickable Button for Targeting)
-        -- Background Fill / Border
-        if ShroudGUIBox then
-            ShroudGUIBox(x, y, w, h, "")
+        -- 1. Base Slot Square (Always visible)
+        if ShroudGUILabel then
+            -- Gray border/frame simulation
+            ShroudGUILabel(x, y, w, h, "<color=#555555FF>█</color>") -- Light Gray Frame
+            ShroudGUILabel(x + 1, y + 1, w - 2, h - 2, "<color=#111111FF>█</color>") -- Dark interior
         end
 
         if member then
-            -- HP Vertical Bar (70% Opacity Full Box Fill)
+            -- 2. HP Vertical Bar (Background Fill at 70% opacity)
             if member.maxHp > 0 then
                 local ratio = member.hp / member.maxHp
                 local hpH = math.floor(h * ratio)
@@ -332,25 +338,31 @@ function DrawRaidFrames()
 
                 -- Draw HP Fill (Using extremely large size to fill background)
                 if ShroudGUILabel then
-                    -- Stacking multiple blocks for full width and using height scaling
-                    local fillText = string.format("<size=%d><color=%s>█</color></size>", h, color)
-                    ShroudGUILabel(x, y + (h - hpH), w, hpH, fillText)
+                    -- Background (Empty part)
+                    ShroudGUILabel(x, y, w, h, string.format("<size=%d><color=%s>█</color></size>", h, config.colors.hpEmpty))
+                    -- Active HP part
+                    if hpH > 0 then
+                        local fillText = string.format("<size=%d><color=%s>█</color></size>", h, color)
+                        ShroudGUILabel(x, y + (h - hpH), w, hpH, fillText)
+                    end
                 end
             end
 
+            -- Clickable Area
             if ShroudGUIButton and ShroudGUIButton(x, y, w, h, "") then
-                -- Action: Target the player
                 ShroudConsoleInput("/target " .. member.name)
                 ShroudLog("Targeting: " .. member.name)
             end
 
-            -- Name Overlay (Top Center with Shadow)
+            -- 3. Name & Status Overlay
             if ShroudGUILabel then
+                -- Shadowed Name
                 ShroudGUILabel(x + 1, y + 11, w, 20, "<color=#000000FF><b>" .. member.name:sub(1, 15) .. "</b></color>")
                 ShroudGUILabel(x, y + 10, w, 20, "<b>" .. member.name:sub(1, 15) .. "</b>")
 
-                -- HP Text (Bottom Center with Shadow)
-                local hpP = math.floor((member.hp / member.maxHp) * 100)
+                -- HP Percentage
+                local hpP = 0
+                if member.maxHp > 0 then hpP = math.floor((member.hp / member.maxHp) * 100) end
                 ShroudGUILabel(x + 1, y + h - 21, w, 20, string.format("<color=#000000FF><b>%d%%</b></color>", hpP))
                 ShroudGUILabel(x, y + h - 22, w, 20, string.format("<b>%d%%</b>", hpP))
             end
@@ -358,13 +370,13 @@ function DrawRaidFrames()
             -- [[ BUFF INDICATORS ]]
 
             -- Soothing Rain / Douse (Top Left)
-            if (HasBuff(member, "Soothing Rain") or HasBuff(member, "Douse")) and ShroudGUILabel then
+            if (HasBuff(member, "Rain") or HasBuff(member, "Douse")) and ShroudGUILabel then
                 local colorText = string.format("<color=%s>█</color>", config.colors.soothingRain)
                 ShroudGUILabel(x + 2, y + 2, 15, 15, colorText)
             end
 
             -- Dig In / Knight's Grace (Silver/Gold - Top Right)
-            if (HasBuff(member, "Dig In") or HasBuff(member, "Knight's Grace") or HasBuff(member, "Knights Grace")) and ShroudGUILabel then
+            if (HasBuff(member, "Dig In") or HasBuff(member, "Grace")) and ShroudGUILabel then
                 local isGrace = HasBuff(member, "Grace")
                 local color = isGrace and config.colors.knightsGrace or config.colors.digIn
                 local colorText = string.format("<color=%s>█</color>", color)
@@ -372,7 +384,7 @@ function DrawRaidFrames()
             end
 
             -- Torpor / Valiant Warden (Bottom Left)
-            if (HasBuff(member, "Torpor") or HasBuff(member, "Valiant Warden")) and ShroudGUILabel then
+            if (HasBuff(member, "Torpor") or HasBuff(member, "Valiant")) and ShroudGUILabel then
                 local isValiant = HasBuff(member, "Valiant")
                 local color = isValiant and config.colors.valiantWarden or config.colors.torpor
                 local colorText = string.format("<color=%s>█</color>", color)
@@ -380,7 +392,7 @@ function DrawRaidFrames()
             end
 
             -- Healing Grace / Purify Burst (Bottom Right)
-            if (HasBuff(member, "Healing Grace") or HasBuff(member, "Purify Burst")) and ShroudGUILabel then
+            if (HasBuff(member, "Healing") or HasBuff(member, "Purify")) and ShroudGUILabel then
                 local isPurify = HasBuff(member, "Purify")
                 local color = isPurify and config.colors.purifyBurst or config.colors.healingGrace
                 local colorText = string.format("<color=%s>█</color>", color)
