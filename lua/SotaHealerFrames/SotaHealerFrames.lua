@@ -188,7 +188,7 @@ function UpdatePartyData()
             local name = nil
             if ShroudGetPartyMemberName then name = ShroudGetPartyMemberName(i) end
 
-            if name and name ~= myName then
+            if name and name ~= myName and name ~= "None" and name ~= "" then
                 local hp, maxHp, focus, maxFocus = 0, 1, 0, 1
 
                 -- Check for new R151 ShroudGetPartyMemberData
@@ -277,12 +277,17 @@ function DrawRaidFrames()
         local member = partyData[i]
 
         -- Main Frame Square (Clickable Button for Targeting)
-        if member then
-            -- Background Fill for "Square" feel
-            if ShroudGUIBox then
-                ShroudGUIBox(x, y, w, h, "") -- Empty box for background
-            end
+        -- Background Fill / Border
+        if ShroudGUIBox then
+            ShroudGUIBox(x, y, w, h, "")
+        end
 
+        -- Dark Background Label (Light Gray Border Effect)
+        if ShroudGUILabel then
+            ShroudGUILabel(x + 1, y + 1, w - 2, h - 2, "<color=#222222FF>█</color>")
+        end
+
+        if member then
             if ShroudGUIButton and ShroudGUIButton(x, y, w, h, "") then
                 -- Action: Target the player
                 ShroudConsoleInput("/target " .. member.name)
@@ -292,21 +297,27 @@ function DrawRaidFrames()
             -- HP Vertical Bar
             if member.maxHp > 0 then
                 local ratio = member.hp / member.maxHp
-                local hpH = (h - 20) * ratio
+                local hpH = math.floor((h - 10) * ratio)
                 local color = config.colors.hpHigh
                 if ratio < 0.3 then color = config.colors.hpLow elseif ratio < 0.6 then color = config.colors.hpMid end
 
-                -- Draw HP Fill (Stacked blocks to fill square)
+                -- Draw HP Fill (Using a solid block string to ensure visibility)
                 if ShroudGUILabel then
-                    ShroudGUILabel(x + 5, y + (h - 15) - hpH, w - 10, hpH, string.format("<color=%s>█</color>", color))
+                    local barText = ""
+                    for b = 1, 5 do barText = barText .. string.format("<color=%s>█</color>", color) end
+                    ShroudGUILabel(x + 5, y + (h - 5) - hpH, w - 10, hpH, barText)
                 end
             end
 
             -- Name Overlay (Top Center)
             if ShroudGUILabel then
+                -- Shadow for readability
+                ShroudGUILabel(x + 6, y + 6, w - 10, 20, "<color=#000000FF><b>" .. member.name:sub(1, 15) .. "</b></color>")
                 ShroudGUILabel(x + 5, y + 5, w - 10, 20, "<b>" .. member.name:sub(1, 15) .. "</b>")
+
                 -- HP Text (Bottom Center)
                 local ratio = member.maxHp > 0 and (member.hp / member.maxHp) or 0
+                ShroudGUILabel(x + 6, y + h - 21, w - 10, 20, string.format("<size=12><color=#000000FF><b>%d%%</b></color></size>", math.floor(ratio * 100)))
                 ShroudGUILabel(x + 5, y + h - 22, w - 10, 20, string.format("<size=12><b>%d%%</b></size>", math.floor(ratio * 100)))
             end
 
