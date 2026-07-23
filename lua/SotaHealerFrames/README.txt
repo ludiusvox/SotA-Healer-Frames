@@ -1,5 +1,7 @@
 SotA Healer Frames v1.0
 ======================
+Creator: Ludiusvox
+Version: 1.0
 
 INSTALLATION:
 1. Copy the 'SotaHealerFrames' folder to your Shroud of the Avatar Lua directory.
