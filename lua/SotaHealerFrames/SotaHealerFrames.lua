@@ -161,7 +161,8 @@ end
 
 function UpdatePartyData()
     partyData = {}
-    local count = ShroudGetPartyMemberCount()
+    local count = 0
+    if ShroudGetPartyMemberCount then count = ShroudGetPartyMemberCount() end
 
     -- We want a fixed 12-slot array where the player is in a central "Power Spot"
     local playerSlot = 6
@@ -169,21 +170,23 @@ function UpdatePartyData()
     -- Collect all party members including self
     local members = {}
 
-    -- Local Player Data
+    -- Local Player Data (Modern R151 IDs)
     local myData = {
         name = myName,
-        hp = ShroudGetStat(0),
-        maxHp = ShroudGetStat(1),
-        focus = ShroudGetStat(2),
-        maxFocus = ShroudGetStat(3)
+        hp = GetMyStat(14) or 0,    -- Current Health
+        maxHp = GetMyStat(30) or 1, -- Max Health
+        focus = GetMyStat(13) or 0, -- Current Focus
+        maxFocus = GetMyStat(27) or 1 -- Max Focus
     }
 
     -- Try modern R151 API for others
     if count > 0 then
         for i = 1, count do
-            local name = ShroudGetPartyMemberName(i)
+            local name = nil
+            if ShroudGetPartyMemberName then name = ShroudGetPartyMemberName(i) end
+
             if name and name ~= myName then
-                local hp, maxHp, focus, maxFocus = 0, 0, 0, 0
+                local hp, maxHp, focus, maxFocus = 0, 1, 0, 1
 
                 -- Check for new R151 ShroudGetPartyMemberData
                 if ShroudGetPartyMemberData then
@@ -191,15 +194,15 @@ function UpdatePartyData()
                     if data then
                         name = data.Name or name
                         hp = data.Health or 0
-                        maxHp = data.MaxHealth or 0
+                        maxHp = data.MaxHealth or 1
                         focus = data.Focus or 0
-                        maxFocus = data.MaxFocus or 0
+                        maxFocus = data.MaxFocus or 1
                     end
                 elseif ShroudGetPartyMemberStat then
-                    hp = ShroudGetPartyMemberStat(i, 0)
-                    maxHp = ShroudGetPartyMemberStat(i, 1)
-                    focus = ShroudGetPartyMemberStat(i, 2)
-                    maxFocus = ShroudGetPartyMemberStat(i, 3)
+                    hp = ShroudGetPartyMemberStat(i, 14) or 0
+                    maxHp = ShroudGetPartyMemberStat(i, 30) or 1
+                    focus = ShroudGetPartyMemberStat(i, 13) or 0
+                    maxFocus = ShroudGetPartyMemberStat(i, 27) or 1
                 end
 
                 table.insert(members, {
@@ -392,8 +395,8 @@ function DrawLegend()
         startY = screenHeight / 2 - 130
     end
 
-    local legendW = 220 -- Increased from 200
-    local legendH = 360
+    local legendW = 240 -- Increased from 220
+    local legendH = 420 -- Adjusted for new spacing
 
     -- Main Legend Container
     if ShroudGUIBox then
@@ -406,7 +409,7 @@ function DrawLegend()
     end
 
     local function drawEntry(idx, color, text, subtext)
-        local y = startY + 45 + (idx * 38) -- Increased vertical spacing from 35 to 38
+        local y = startY + 45 + (idx * 42) -- Increased vertical spacing from 38 to 42
 
         if ShroudGUILabel then
             -- Icon with "CSS-like" shadow effect using two labels
@@ -417,7 +420,7 @@ function DrawLegend()
             ShroudGUILabel(startX + 35, y, legendW - 45, 20, "<b>" .. text .. "</b>")
             if subtext then
                 -- Increased spacing to subtext and width for long descriptions
-                ShroudGUILabel(startX + 35, y + 16, legendW - 40, 18, "<size=10><color=#CCCCCC>" .. subtext .. "</color></size>")
+                ShroudGUILabel(startX + 35, y + 16, legendW - 40, 20, "<size=10><color=#CCCCCC>" .. subtext .. "</color></size>")
             end
         end
     end
@@ -430,14 +433,14 @@ function DrawLegend()
 
     -- Debuff Section
     if ShroudGUILabel then
-        ShroudGUILabel(startX + 10, startY + 195, legendW - 20, 2, "<color=#555555>________________________</color>")
+        ShroudGUILabel(startX + 10, startY + 215, legendW - 20, 2, "<color=#555555>__________________________</color>")
     end
-    drawEntry(5.2, config.colors.blind, "Blindness", "Yellow - High Priority")
-    drawEntry(6.2, config.colors.douse, "Fire Damage", "Light Red - Douse!")
-    drawEntry(7.2, config.colors.debuffGeneral, "General Debuff", "Dark Red - CC/Other")
+    drawEntry(5.4, config.colors.blind, "Blindness", "Yellow - High Priority")
+    drawEntry(6.4, config.colors.douse, "Fire Damage", "Light Red - Douse!")
+    drawEntry(7.4, config.colors.debuffGeneral, "General Debuff", "Dark Red - CC/Other")
 
     -- New entry for Healing Grace
-    drawEntry(8.2, config.colors.healingGrace, "Healing Grace", "Light Green - Bottom Right")
+    drawEntry(8.4, config.colors.healingGrace, "Healing Grace", "Light Green - Bottom Right")
 end
 
 function DrawQuestTicker()
@@ -566,10 +569,21 @@ function CleanupTrackedBuffs(now)
 end
 
 function ShroudLog(msg)
-    if ShroudIncomingChatMessage then
+    if ShroudConsoleLog then
+        ShroudConsoleLog(msg)
+    elseif ShroudIncomingChatMessage then
         ShroudIncomingChatMessage(msg, "Lua")
     else
         -- Fallback if not in-game environment
         print(msg)
     end
+end
+
+function GetMyStat(id)
+    if ShroudGetStatValueByNumber then
+        return ShroudGetStatValueByNumber(id)
+    elseif ShroudGetStat then
+        return ShroudGetStat(id)
+    end
+    return 0
 end
