@@ -21,12 +21,13 @@ local Description = "Advanced 4x3 cubic healer frames for 12-man raids.";
 local config = {
     updateRate = 0.1,    -- 10 ticks per second (100ms)
     lastUpdate = 0,
-    framesPos = { x = 0, y = 0 }, -- Centered dynamically
+    framesPos = { x = 0, y = 0, manual = false }, -- Centered dynamically unless moved
     frameSize = { w = 100, h = 100 }, -- Cubic/Square for easier clicking
     grid = { cols = 4, rows = 3 },    -- 4x3 grid for 12 players
     cubeSize = 32,
     cubePos = { x = 20, y = 150 },
     chatPos = { x = 10, y = 600 },
+    settingsFile = "", -- Path set in ShroudOnStart
     colors = {
         hpHigh = "00FF00AA",
         hpMid = "FFFF00AA",
@@ -78,6 +79,10 @@ function ShroudOnStart()
     screenHeight = ShroudGetScreenY()
     myName = ShroudGetPlayerName()
 
+    -- Set settings path (R151 compatibility)
+    config.settingsFile = ShroudLuaPath .. "/SotaHealerFrames/user.ini"
+    LoadSettings()
+
     -- Hide native party UI to avoid redundancy
     if ShroudHideNativeParty then
         ShroudHideNativeParty(true)
@@ -86,6 +91,7 @@ function ShroudOnStart()
 end
 
 function ShroudOnDisableScript()
+    SaveSettings()
     -- Restore native party UI when the script is disabled
     if ShroudHideNativeParty then
         ShroudHideNativeParty(false)
@@ -198,11 +204,18 @@ function DrawRaidFrames()
     local h = config.frameSize.h
     local spacing = 8
 
-    -- Calculate center of screen
+    -- Calculate center of screen or use saved position
     local gridWidth = cols * (w + spacing) - spacing
     local gridHeight = rows * (h + spacing) - spacing
-    local startX = screenWidth / 2 - gridWidth / 2
-    local startY = screenHeight / 2 - gridHeight / 2
+
+    local startX, startY
+    if config.framesPos.manual then
+        startX = config.framesPos.x
+        startY = config.framesPos.y
+    else
+        startX = screenWidth / 2 - gridWidth / 2
+        startY = screenHeight / 2 - gridHeight / 2
+    end
 
     for i = 1, 12 do
         local col = (i - 1) % cols
@@ -435,6 +448,32 @@ function ProcessIncomingChat(channel, sender, message)
 end
 
 -- [[ UTILS ]]
+
+function LoadSettings()
+    local file = io.open(config.settingsFile, "r")
+    if not file then return end
+
+    for line in file:lines() do
+        local param, value = line:match('^([%w|_]+)%s-=%s-(.+)$')
+        if param and value then
+            if param == 'framesX' then config.framesPos.x = tonumber(value)
+            elseif param == 'framesY' then config.framesPos.y = tonumber(value)
+            elseif param == 'framesManual' then config.framesPos.manual = (value == 'true')
+            end
+        end
+    end
+    file:close()
+end
+
+function SaveSettings()
+    local file = io.open(config.settingsFile, "w")
+    if not file then return end
+
+    file:write("framesX=" .. tostring(config.framesPos.x) .. "\n")
+    file:write("framesY=" .. tostring(config.framesPos.y) .. "\n")
+    file:write("framesManual=" .. tostring(config.framesPos.manual) .. "\n")
+    file:close()
+end
 
 function CleanupTrackedBuffs(now)
     for pName, buffs in pairs(globalTrackedBuffs) do
