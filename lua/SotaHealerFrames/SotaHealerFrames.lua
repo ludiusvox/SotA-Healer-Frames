@@ -31,19 +31,19 @@ local config = {
     chatPos = { x = 10, y = 600 },
     settingsFile = "", -- Path set in ShroudOnStart
     colors = {
-        hpHigh = "00FF00AA",
-        hpMid = "FFFF00AA",
-        hpLow = "FF0000AA",
-        focus = "0000FFAA",
-        bg = "00000088",
-        soothingRain = "#00CCFF", -- Specific shade of blue
-        knightsGrace = "#FFD700", -- Gold/Knightly
-        digIn = "#C0C0C0",        -- Silver
-        torpor = "#006400",       -- Dark Green
-        douse = "#FF7F7FAA",      -- Light Red (Fire DoT)
-        blind = "#FFFF00AA",      -- Yellow
-        debuffGeneral = "#8B0000AA", -- Dark Red
-        healingGrace = "#90EE90"   -- Light Green
+        hpHigh = "#00FF00B2", -- 70% opacity green
+        hpMid  = "#FFFF00B2", -- 70% opacity yellow
+        hpLow  = "#FF0000B2", -- 70% opacity red
+        focus = "#0000FFB2",
+        bg = "#222222FF",
+        soothingRain = "#00CCFF",
+        knightsGrace = "#FFD700",
+        digIn = "#C0C0C0",
+        torpor = "#006400",
+        douse = "#FF7F7F",
+        blind = "#FFFF00",
+        debuffGeneral = "#8B0000",
+        healingGrace = "#90EE90"
     }
 }
 
@@ -188,34 +188,39 @@ function UpdatePartyData()
             local name = nil
             if ShroudGetPartyMemberName then name = ShroudGetPartyMemberName(i) end
 
-            if name and name ~= myName and name ~= "None" and name ~= "" then
-                local hp, maxHp, focus, maxFocus = 0, 1, 0, 1
+            if name and name ~= "" and name ~= "None" then
+                -- Check if it's the local player (normalize names to catch titles)
+                local isSelf = (name == myName) or name:find(myName) or myName:find(name)
 
-                -- Check for new R151 ShroudGetPartyMemberData
-                if ShroudGetPartyMemberData then
-                    local data = ShroudGetPartyMemberData(i)
-                    if data then
-                        name = data.Name or name
-                        hp = data.Health or 0
-                        maxHp = data.MaxHealth or 1
-                        focus = data.Focus or 0
-                        maxFocus = data.MaxFocus or 1
+                if not isSelf then
+                    local hp, maxHp, focus, maxFocus = 0, 1, 0, 1
+
+                    -- Check for new R151 ShroudGetPartyMemberData
+                    if ShroudGetPartyMemberData then
+                        local data = ShroudGetPartyMemberData(i)
+                        if data then
+                            name = data.Name or name
+                            hp = data.Health or 0
+                            maxHp = data.MaxHealth or 1
+                            focus = data.Focus or 0
+                            maxFocus = data.MaxFocus or 1
+                        end
+                    elseif ShroudGetPartyMemberStat then
+                        hp = ShroudGetPartyMemberStat(i, 14) or 0
+                        maxHp = ShroudGetPartyMemberStat(i, 30) or 1
+                        focus = ShroudGetPartyMemberStat(i, 13) or 0
+                        maxFocus = ShroudGetPartyMemberStat(i, 27) or 1
                     end
-                elseif ShroudGetPartyMemberStat then
-                    hp = ShroudGetPartyMemberStat(i, 14) or 0
-                    maxHp = ShroudGetPartyMemberStat(i, 30) or 1
-                    focus = ShroudGetPartyMemberStat(i, 13) or 0
-                    maxFocus = ShroudGetPartyMemberStat(i, 27) or 1
-                end
 
-                table.insert(members, {
-                    name = name,
-                    hp = hp,
-                    maxHp = maxHp,
-                    focus = focus,
-                    maxFocus = maxFocus,
-                    buffs = globalTrackedBuffs[name] or {}
-                })
+                    table.insert(members, {
+                        name = name,
+                        hp = hp,
+                        maxHp = maxHp,
+                        focus = focus,
+                        maxFocus = maxFocus,
+                        buffs = globalTrackedBuffs[name] or {}
+                    })
+                end
             end
         end
     end
@@ -282,43 +287,37 @@ function DrawRaidFrames()
             ShroudGUIBox(x, y, w, h, "")
         end
 
-        -- Dark Background Label (Light Gray Border Effect)
-        if ShroudGUILabel then
-            ShroudGUILabel(x + 1, y + 1, w - 2, h - 2, "<color=#222222FF>█</color>")
-        end
-
         if member then
+            -- HP Vertical Bar (70% Opacity Full Box Fill)
+            if member.maxHp > 0 then
+                local ratio = member.hp / member.maxHp
+                local hpH = math.floor(h * ratio)
+                local color = config.colors.hpHigh
+                if ratio < 0.3 then color = config.colors.hpLow elseif ratio < 0.6 then color = config.colors.hpMid end
+
+                -- Draw HP Fill (Using extremely large size to fill background)
+                if ShroudGUILabel then
+                    -- Stacking multiple blocks for full width and using height scaling
+                    local fillText = string.format("<size=%d><color=%s>█</color></size>", h, color)
+                    ShroudGUILabel(x, y + (h - hpH), w, hpH, fillText)
+                end
+            end
+
             if ShroudGUIButton and ShroudGUIButton(x, y, w, h, "") then
                 -- Action: Target the player
                 ShroudConsoleInput("/target " .. member.name)
                 ShroudLog("Targeting: " .. member.name)
             end
 
-            -- HP Vertical Bar
-            if member.maxHp > 0 then
-                local ratio = member.hp / member.maxHp
-                local hpH = math.floor((h - 10) * ratio)
-                local color = config.colors.hpHigh
-                if ratio < 0.3 then color = config.colors.hpLow elseif ratio < 0.6 then color = config.colors.hpMid end
-
-                -- Draw HP Fill (Using a solid block string to ensure visibility)
-                if ShroudGUILabel then
-                    local barText = ""
-                    for b = 1, 5 do barText = barText .. string.format("<color=%s>█</color>", color) end
-                    ShroudGUILabel(x + 5, y + (h - 5) - hpH, w - 10, hpH, barText)
-                end
-            end
-
-            -- Name Overlay (Top Center)
+            -- Name Overlay (Top Center with Shadow)
             if ShroudGUILabel then
-                -- Shadow for readability
-                ShroudGUILabel(x + 6, y + 6, w - 10, 20, "<color=#000000FF><b>" .. member.name:sub(1, 15) .. "</b></color>")
-                ShroudGUILabel(x + 5, y + 5, w - 10, 20, "<b>" .. member.name:sub(1, 15) .. "</b>")
+                ShroudGUILabel(x + 1, y + 11, w, 20, "<color=#000000FF><b>" .. member.name:sub(1, 15) .. "</b></color>")
+                ShroudGUILabel(x, y + 10, w, 20, "<b>" .. member.name:sub(1, 15) .. "</b>")
 
-                -- HP Text (Bottom Center)
-                local ratio = member.maxHp > 0 and (member.hp / member.maxHp) or 0
-                ShroudGUILabel(x + 6, y + h - 21, w - 10, 20, string.format("<size=12><color=#000000FF><b>%d%%</b></color></size>", math.floor(ratio * 100)))
-                ShroudGUILabel(x + 5, y + h - 22, w - 10, 20, string.format("<size=12><b>%d%%</b></size>", math.floor(ratio * 100)))
+                -- HP Text (Bottom Center with Shadow)
+                local hpP = math.floor((member.hp / member.maxHp) * 100)
+                ShroudGUILabel(x + 1, y + h - 21, w, 20, string.format("<color=#000000FF><b>%d%%</b></color>", hpP))
+                ShroudGUILabel(x, y + h - 22, w, 20, string.format("<b>%d%%</b>", hpP))
             end
 
             -- [[ BUFF INDICATORS ]]
