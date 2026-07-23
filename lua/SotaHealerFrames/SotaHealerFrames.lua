@@ -273,32 +273,38 @@ function DrawRaidFrames()
 
         local member = partyData[i]
 
-        -- Main Frame Box (always draw slots for "cubic" feel)
-        if ShroudGUIBox then
-            ShroudGUIBox(x, y, w, h, member and "" or "Empty")
-        end
-
+        -- Main Frame Square (Clickable Button for Targeting)
         if member then
-            -- HP Vertical Bar (Background)
+            if ShroudGUIButton(x, y, w, h, "") then
+                -- Action: Target the player
+                ShroudConsoleInput("/target " .. member.name)
+                ShroudLog("Targeting: " .. member.name)
+            end
+
+            -- Background Fill for "Square" feel
+            if ShroudGUILabel then
+                ShroudGUILabel(x, y, w, h, "<color=#222222FF>█</color>") -- Solid Dark Gray
+            end
+
+            -- HP Vertical Bar
             if member.maxHp > 0 then
                 local ratio = member.hp / member.maxHp
                 local hpH = (h - 20) * ratio
-                -- Using a label as a background color bar
                 local color = config.colors.hpHigh
                 if ratio < 0.3 then color = config.colors.hpLow elseif ratio < 0.6 then color = config.colors.hpMid end
 
-                -- Draw HP Fill
+                -- Draw HP Fill (Stacked blocks to fill square)
                 if ShroudGUILabel then
                     ShroudGUILabel(x + 5, y + (h - 15) - hpH, w - 10, hpH, string.format("<color=%s>█</color>", color))
-
-                    -- HP Text
-                    ShroudGUILabel(x + 5, y + h - 20, w - 10, 20, string.format("%d%%", math.floor(ratio * 100)))
                 end
             end
 
-            -- Name Overlay (Centered)
+            -- Name Overlay (Top Center)
             if ShroudGUILabel then
-                ShroudGUILabel(x + 5, y + 5, w - 10, 20, member.name:sub(1, 8))
+                ShroudGUILabel(x + 5, y + 5, w - 10, 20, "<b>" .. member.name:sub(1, 10) .. "</b>")
+                -- HP Text (Bottom Center)
+                local ratio = member.maxHp > 0 and (member.hp / member.maxHp) or 0
+                ShroudGUILabel(x + 5, y + h - 22, w - 10, 20, string.format("<size=12><b>%d%%</b></size>", math.floor(ratio * 100)))
             end
 
             -- [[ BUFF INDICATORS ]]
@@ -485,27 +491,30 @@ function ProcessIncomingChat(channel, sender, message)
     local entry = { sender = sender, message = message, time = now }
 
     -- Buff Tracking (Parsing)
-    -- Pattern: "PlayerName is now under the effect of BuffName."
+    -- Broadening patterns to catch various system message formats
     local pName, bName = message:match("^(.-) is now under the effect of (.-)%.")
+    if not pName then pName, bName = message:match("^(.-) is now affected by (.-)%.") end
+
     if not pName then
-        -- Pattern: "You are now under the effect of BuffName."
         bName = message:match("^You are now under the effect of (.-)%.")
+        if not bName then bName = message:match("^You are now affected by (.-)%.") end
         if bName then pName = myName end
     end
 
     if pName and bName and BUFF_META[bName] then
         if not globalTrackedBuffs[pName] then globalTrackedBuffs[pName] = {} end
         globalTrackedBuffs[pName][bName] = now + BUFF_META[bName].duration
+        -- ShroudLog("Buff Detected: " .. bName .. " on " .. pName) -- Debug
     end
 
     -- Loss of Buff
-    pName, bName = message:match("^(.-) has lost the effect of (.-)%.")
-    if not pName then
-        bName = message:match("^You have lost the effect of (.-)%.")
-        if bName then pName = myName end
+    local lpName, lbName = message:match("^(.-) has lost the effect of (.-)%.")
+    if not lpName then
+        lbName = message:match("^You have lost the effect of (.-)%.")
+        if lbName then lpName = myName end
     end
-    if pName and bName and globalTrackedBuffs[pName] then
-        globalTrackedBuffs[pName][bName] = nil
+    if lpName and lbName and globalTrackedBuffs[lpName] then
+        globalTrackedBuffs[lpName][lbName] = nil
     end
 
     -- Categorization Engine
