@@ -7,7 +7,7 @@
 --.author Ludiusvox
 --.version 1.0
 --.description Advanced 4x3 cubic healer frames for 12-man raids.
---.icon SotaHealerFrames.png
+--.icon SotaHealerFrames/SotaHealerFrames.png
 
 local ScriptName = "SotA Healer Frames";
 local Version = "1.0";
@@ -23,6 +23,7 @@ local config = {
     updateRate = 0.1,    -- 10 ticks per second (100ms)
     lastUpdate = 0,
     framesPos = { x = 0, y = 0, manual = false }, -- Centered dynamically unless moved
+    legendPos = { x = 0, y = 0, manual = false }, -- Centered dynamically unless moved
     frameSize = { w = 100, h = 100 }, -- Cubic/Square for easier clicking
     grid = { cols = 4, rows = 3 },    -- 4x3 grid for 12 players
     cubeSize = 32,
@@ -101,7 +102,7 @@ function ShroudOnDisableScript()
 end
 
 function ShroudOnUpdate()
-    local now = ShroudGetTime()
+    local now = ShroudTime or 0
     if now - config.lastUpdate < config.updateRate then return end
     config.lastUpdate = now
 
@@ -119,6 +120,40 @@ function ShroudOnGUI()
 end
 
 function ShroudOnConsoleInput(channel, sender, message)
+    -- Command Parsing
+    local cmd, arg1, arg2 = message:match("^/shf (%w+)%s?(%-?%d*)%s?(%-?%d*)")
+    if cmd then
+        if cmd == "legend" then
+            if arg1 ~= "" and arg2 ~= "" then
+                config.legendPos.x = tonumber(arg1)
+                config.legendPos.y = tonumber(arg2)
+                config.legendPos.manual = true
+                ShroudLog("Legend moved to " .. arg1 .. ", " .. arg2)
+                SaveSettings()
+            else
+                ShroudLog("Usage: /shf legend <x> <y>")
+            end
+            return
+        elseif cmd == "frames" then
+            if arg1 ~= "" and arg2 ~= "" then
+                config.framesPos.x = tonumber(arg1)
+                config.framesPos.y = tonumber(arg2)
+                config.framesPos.manual = true
+                ShroudLog("Frames moved to " .. arg1 .. ", " .. arg2)
+                SaveSettings()
+            else
+                ShroudLog("Usage: /shf frames <x> <y>")
+            end
+            return
+        elseif cmd == "reset" then
+            config.framesPos.manual = false
+            config.legendPos.manual = false
+            ShroudLog("Positions reset to default.")
+            SaveSettings()
+            return
+        end
+    end
+
     ProcessIncomingChat(channel, sender, message)
 end
 
@@ -129,55 +164,64 @@ function UpdatePartyData()
     local count = ShroudGetPartyMemberCount()
 
     -- We want a fixed 12-slot array where the player is in a central "Power Spot"
-    -- In a 4x3 grid (indices 1-12), indices 6 and 7 are the most central.
     local playerSlot = 6
 
-    local others = {}
+    -- Collect all party members including self
+    local members = {}
+
+    -- Local Player Data
+    local myData = {
+        name = myName,
+        hp = ShroudGetStat(0),
+        maxHp = ShroudGetStat(1),
+        focus = ShroudGetStat(2),
+        maxFocus = ShroudGetStat(3)
+    }
+
+    -- Try modern R151 API for others
     if count > 0 then
         for i = 1, count do
-            table.insert(others, ShroudGetPartyMemberName(i))
+            local name = ShroudGetPartyMemberName(i)
+            if name and name ~= myName then
+                local hp, maxHp, focus, maxFocus = 0, 0, 0, 0
+
+                -- Check for new R151 ShroudGetPartyMemberData
+                if ShroudGetPartyMemberData then
+                    local data = ShroudGetPartyMemberData(i)
+                    if data then
+                        name = data.Name or name
+                        hp = data.Health or 0
+                        maxHp = data.MaxHealth or 0
+                        focus = data.Focus or 0
+                        maxFocus = data.MaxFocus or 0
+                    end
+                elseif ShroudGetPartyMemberStat then
+                    hp = ShroudGetPartyMemberStat(i, 0)
+                    maxHp = ShroudGetPartyMemberStat(i, 1)
+                    focus = ShroudGetPartyMemberStat(i, 2)
+                    maxFocus = ShroudGetPartyMemberStat(i, 3)
+                end
+
+                table.insert(members, {
+                    name = name,
+                    hp = hp,
+                    maxHp = maxHp,
+                    focus = focus,
+                    maxFocus = maxFocus,
+                    buffs = globalTrackedBuffs[name] or {}
+                })
+            end
         end
     end
 
-    local otherIdx = 1
+    local memberIdx = 1
     for i = 1, 12 do
-        local name = nil
         if i == playerSlot then
-            name = myName
-        elseif otherIdx <= #others then
-            name = others[otherIdx]
-            otherIdx = otherIdx + 1
-        end
-
-        if name then
-            local hp, maxHp, focus, maxFocus = 0, 0, 0, 0
-            if name == myName then
-                hp = ShroudGetStat(0)
-                maxHp = ShroudGetStat(1)
-                focus = ShroudGetStat(2)
-                maxFocus = ShroudGetStat(3)
-            else
-                -- Find the original party index for this name
-                local pIdx = -1
-                for j = 1, count do
-                    if ShroudGetPartyMemberName(j) == name then pIdx = j break end
-                end
-                if pIdx ~= -1 then
-                    hp = ShroudGetPartyMemberStat(pIdx, 0)
-                    maxHp = ShroudGetPartyMemberStat(pIdx, 1)
-                    focus = ShroudGetPartyMemberStat(pIdx, 2)
-                    maxFocus = ShroudGetPartyMemberStat(pIdx, 3)
-                end
-            end
-
-            partyData[i] = {
-                name = name,
-                hp = hp,
-                maxHp = maxHp,
-                focus = focus,
-                maxFocus = maxFocus,
-                buffs = globalTrackedBuffs[name] or {}
-            }
+            partyData[i] = myData
+            partyData[i].buffs = globalTrackedBuffs[myName] or {}
+        elseif memberIdx <= #members then
+            partyData[i] = members[memberIdx]
+            memberIdx = memberIdx + 1
         else
             partyData[i] = nil -- Empty slot
         end
@@ -227,7 +271,9 @@ function DrawRaidFrames()
         local member = partyData[i]
 
         -- Main Frame Box (always draw slots for "cubic" feel)
-        ShroudGUIBox(x, y, w, h, member and "" or "Empty")
+        if ShroudGUIBox then
+            ShroudGUIBox(x, y, w, h, member and "" or "Empty")
+        end
 
         if member then
             -- HP Vertical Bar (Background)
@@ -239,37 +285,41 @@ function DrawRaidFrames()
                 if ratio < 0.3 then color = config.colors.hpLow elseif ratio < 0.6 then color = config.colors.hpMid end
 
                 -- Draw HP Fill
-                ShroudGUILabel(x + 5, y + (h - 15) - hpH, w - 10, hpH, string.format("<color=%s>█</color>", color))
+                if ShroudGUILabel then
+                    ShroudGUILabel(x + 5, y + (h - 15) - hpH, w - 10, hpH, string.format("<color=%s>█</color>", color))
 
-                -- HP Text
-                ShroudGUILabel(x + 5, y + h - 20, w - 10, 20, string.format("%d%%", math.floor(ratio * 100)))
+                    -- HP Text
+                    ShroudGUILabel(x + 5, y + h - 20, w - 10, 20, string.format("%d%%", math.floor(ratio * 100)))
+                end
             end
 
             -- Name Overlay (Centered)
-            ShroudGUILabel(x + 5, y + 5, w - 10, 20, member.name:sub(1, 8))
+            if ShroudGUILabel then
+                ShroudGUILabel(x + 5, y + 5, w - 10, 20, member.name:sub(1, 8))
+            end
 
             -- [[ BUFF INDICATORS ]]
 
             -- Soothing Rain (Top Left)
-            if member.buffs["Soothing Rain"] then
+            if member.buffs["Soothing Rain"] and ShroudGUILabel then
                 local colorText = string.format("<color=%s>█</color>", config.colors.soothingRain)
                 ShroudGUILabel(x + 2, y + 2, 15, 15, colorText)
             end
 
             -- Dig In (Silver - Top Right)
-            if member.buffs["Dig In"] then
+            if member.buffs["Dig In"] and ShroudGUILabel then
                 local colorText = string.format("<color=%s>█</color>", config.colors.digIn)
                 ShroudGUILabel(x + w - 15, y + 2, 15, 15, colorText)
             end
 
             -- Torpor (Dark Green - Bottom Left)
-            if member.buffs["Torpor"] then
+            if member.buffs["Torpor"] and ShroudGUILabel then
                 local colorText = string.format("<color=%s>█</color>", config.colors.torpor)
                 ShroudGUILabel(x + 2, y + h - 15, 15, 15, colorText)
             end
 
             -- Healing Grace (Light Green - Bottom Right)
-            if member.buffs["Healing Grace"] then
+            if member.buffs["Healing Grace"] and ShroudGUILabel then
                 local colorText = string.format("<color=%s>█</color>", config.colors.healingGrace)
                 ShroudGUILabel(x + w - 15, y + h - 15, 15, 15, colorText)
             end
@@ -289,7 +339,7 @@ function DrawRaidFrames()
                 end
             end
 
-            if activeDebuffColor then
+            if activeDebuffColor and ShroudGUILabel then
                 local colorText = string.format("<color=%s>█</color>", activeDebuffColor)
                 -- Right side indicator strip
                 ShroudGUILabel(x + w - 12, y + 15, 10, h - 30, colorText .. "\n" .. colorText .. "\n" .. colorText .. "\n" .. colorText)
@@ -309,10 +359,12 @@ function DrawStatusCubes()
         local stateText = buff.name:sub(1,2)
         if buff.ratio < 0.25 then stateText = "!!" .. stateText end
 
-        ShroudGUIBox(x, y, config.cubeSize, config.cubeSize, stateText)
+        if ShroudGUIBox then
+            ShroudGUIBox(x, y, config.cubeSize, config.cubeSize, stateText)
+        end
 
         -- Special Color for Knight's Grace if in native buffs
-        if buff.name == "Knight's Grace" then
+        if buff.name == "Knight's Grace" and ShroudGUILabel then
             local colorText = string.format("<color=%s>K</color>", config.colors.knightsGrace)
             ShroudGUILabel(x + 2, y + 2, 20, 20, colorText)
         end
@@ -330,28 +382,42 @@ function DrawLegend()
     local spacing = 8
 
     local gridWidth = cols * (w + spacing) - spacing
-    local startX = screenWidth / 2 + gridWidth / 2 + 30
-    local startY = screenHeight / 2 - 130
+
+    local startX, startY
+    if config.legendPos.manual then
+        startX = config.legendPos.x
+        startY = config.legendPos.y
+    else
+        startX = screenWidth / 2 + gridWidth / 2 + 30
+        startY = screenHeight / 2 - 130
+    end
 
     local legendW = 180
     local legendH = 260
 
     -- Main Legend Container
-    ShroudGUIBox(startX, startY, legendW, legendH, "")
+    if ShroudGUIBox then
+        ShroudGUIBox(startX, startY, legendW, legendH, "")
+    end
 
     -- Header "Styled" Label
-    ShroudGUILabel(startX + 10, startY + 5, legendW - 20, 25, "<b><size=14><color=#FFFFFF>INTERFACE LEGEND</color></size></b>")
+    if ShroudGUILabel then
+        ShroudGUILabel(startX + 10, startY + 5, legendW - 20, 25, "<b><size=14><color=#FFFFFF>INTERFACE LEGEND</color></size></b>")
+    end
 
     local function drawEntry(idx, color, text, subtext)
-        local y = startY + 40 + (idx * 28)
-        -- Icon with "CSS-like" shadow effect using two labels
-        ShroudGUILabel(startX + 12, y + 2, 20, 20, "<color=#000000AA>█</color>")
-        ShroudGUILabel(startX + 10, y, 20, 20, string.format("<color=%s>█</color>", color))
+        local y = startY + 40 + (idx * 35) -- Increased spacing from 28 to 35
 
-        -- Text labels
-        ShroudGUILabel(startX + 35, y, legendW - 45, 20, "<b>" .. text .. "</b>")
-        if subtext then
-            ShroudGUILabel(startX + 35, y + 12, legendW - 45, 15, "<size=10><color=#CCCCCC>" .. subtext .. "</color></size>")
+        if ShroudGUILabel then
+            -- Icon with "CSS-like" shadow effect using two labels
+            ShroudGUILabel(startX + 12, y + 2, 20, 20, "<color=#000000AA>█</color>")
+            ShroudGUILabel(startX + 10, y, 20, 20, string.format("<color=%s>█</color>", color))
+
+            -- Text labels
+            ShroudGUILabel(startX + 35, y, legendW - 45, 20, "<b>" .. text .. "</b>")
+            if subtext then
+                ShroudGUILabel(startX + 35, y + 15, legendW - 45, 15, "<size=10><color=#CCCCCC>" .. subtext .. "</color></size>")
+            end
         end
     end
 
@@ -362,27 +428,31 @@ function DrawLegend()
     drawEntry(3, config.colors.knightsGrace, "Knight's Grace", "Corner Highlight")
 
     -- Debuff Section
-    ShroudGUILabel(startX + 10, startY + 155, legendW - 20, 2, "<color=#555555>_____________________</color>")
-    drawEntry(4.5, config.colors.blind, "Blindness", "Yellow - High Priority")
-    drawEntry(5.5, config.colors.douse, "Fire Damage", "Light Red - Douse!")
-    drawEntry(6.5, config.colors.debuffGeneral, "General Debuff", "Dark Red - CC/Other")
+    if ShroudGUILabel then
+        ShroudGUILabel(startX + 10, startY + 185, legendW - 20, 2, "<color=#555555>_____________________</color>")
+    end
+    drawEntry(5.5, config.colors.blind, "Blindness", "Yellow - High Priority")
+    drawEntry(6.5, config.colors.douse, "Fire Damage", "Light Red - Douse!")
+    drawEntry(7.5, config.colors.debuffGeneral, "General Debuff", "Dark Red - CC/Other")
 
     -- New entry for Healing Grace
-    drawEntry(7.5, config.colors.healingGrace, "Healing Grace", "Light Green - Bottom Right")
+    drawEntry(8.5, config.colors.healingGrace, "Healing Grace", "Light Green - Bottom Right")
 
     -- Adjust Legend Height
-    legendH = 290
+    legendH = 340
 end
 
 function DrawQuestTicker()
     local x = screenWidth - 220
     local y = 100
-    ShroudGUILabel(x, y, 200, 20, "QUEST LOG (BETA)")
+    if ShroudGUILabel then
+        ShroudGUILabel(x, y, 200, 20, "QUEST LOG (BETA)")
 
-    for i, q in ipairs(questJournal) do
-        if i > #questJournal - 5 then
-            local offset = (i - (#questJournal - 4)) * 20
-            ShroudGUILabel(x, y + offset, 200, 20, "> " .. q.text)
+        for i, q in ipairs(questJournal) do
+            if i > #questJournal - 5 then
+                local offset = (i - (#questJournal - 4)) * 20
+                ShroudGUILabel(x, y + offset, 200, 20, "> " .. q.text)
+            end
         end
     end
 end
@@ -391,13 +461,17 @@ function DrawEnhancedChat()
     local x = config.chatPos.x
     local y = screenHeight - 200
 
-    ShroudGUIBox(x, y, 400, 180, "Enhanced Chat (Combat)")
+    if ShroudGUIBox then
+        ShroudGUIBox(x, y, 400, 180, "Enhanced Chat (Combat)")
+    end
 
     local lines = 0
     for i = #chatLog.combat, 1, -1 do
         if lines < 8 then
             local entry = chatLog.combat[i]
-            ShroudGUILabel(x + 10, y + 160 - (lines * 18), 380, 20, entry.message)
+            if ShroudGUILabel then
+                ShroudGUILabel(x + 10, y + 160 - (lines * 18), 380, 20, entry.message)
+            end
             lines = lines + 1
         end
     end
@@ -460,6 +534,9 @@ function LoadSettings()
             if param == 'framesX' then config.framesPos.x = tonumber(value)
             elseif param == 'framesY' then config.framesPos.y = tonumber(value)
             elseif param == 'framesManual' then config.framesPos.manual = (value == 'true')
+            elseif param == 'legendX' then config.legendPos.x = tonumber(value)
+            elseif param == 'legendY' then config.legendPos.y = tonumber(value)
+            elseif param == 'legendManual' then config.legendPos.manual = (value == 'true')
             end
         end
     end
@@ -473,6 +550,9 @@ function SaveSettings()
     file:write("framesX=" .. tostring(config.framesPos.x) .. "\n")
     file:write("framesY=" .. tostring(config.framesPos.y) .. "\n")
     file:write("framesManual=" .. tostring(config.framesPos.manual) .. "\n")
+    file:write("legendX=" .. tostring(config.legendPos.x) .. "\n")
+    file:write("legendY=" .. tostring(config.legendPos.y) .. "\n")
+    file:write("legendManual=" .. tostring(config.legendPos.manual) .. "\n")
     file:close()
 end
 
