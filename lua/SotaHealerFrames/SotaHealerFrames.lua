@@ -153,7 +153,10 @@ function ShroudOnConsoleInput(channel, sender, message)
             return
         end
     end
+end
 
+-- Callback for all incoming chat (Buff tracking, etc.)
+function ShroudOnChat(message, sender, channel)
     ProcessIncomingChat(channel, sender, message)
 end
 
@@ -275,15 +278,15 @@ function DrawRaidFrames()
 
         -- Main Frame Square (Clickable Button for Targeting)
         if member then
-            if ShroudGUIButton(x, y, w, h, "") then
+            -- Background Fill for "Square" feel
+            if ShroudGUIBox then
+                ShroudGUIBox(x, y, w, h, "") -- Empty box for background
+            end
+
+            if ShroudGUIButton and ShroudGUIButton(x, y, w, h, "") then
                 -- Action: Target the player
                 ShroudConsoleInput("/target " .. member.name)
                 ShroudLog("Targeting: " .. member.name)
-            end
-
-            -- Background Fill for "Square" feel
-            if ShroudGUILabel then
-                ShroudGUILabel(x, y, w, h, "<color=#222222FF>█</color>") -- Solid Dark Gray
             end
 
             -- HP Vertical Bar
@@ -301,7 +304,7 @@ function DrawRaidFrames()
 
             -- Name Overlay (Top Center)
             if ShroudGUILabel then
-                ShroudGUILabel(x + 5, y + 5, w - 10, 20, "<b>" .. member.name:sub(1, 10) .. "</b>")
+                ShroudGUILabel(x + 5, y + 5, w - 10, 20, "<b>" .. member.name:sub(1, 15) .. "</b>")
                 -- HP Text (Bottom Center)
                 local ratio = member.maxHp > 0 and (member.hp / member.maxHp) or 0
                 ShroudGUILabel(x + 5, y + h - 22, w - 10, 20, string.format("<size=12><b>%d%%</b></size>", math.floor(ratio * 100)))
