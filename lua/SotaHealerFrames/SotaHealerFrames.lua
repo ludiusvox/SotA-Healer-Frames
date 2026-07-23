@@ -1,7 +1,17 @@
+-- name: SotA Healer Frames
+-- author: Ludiusvox
+-- version: 1.0
+-- description: Advanced 4x3 cubic healer frames for 12-man raids with prioritized buff/debuff tracking.
+
 --.name SotA Healer Frames
 --.author Ludiusvox
---.description Advanced 4x3 cubic healer frames for 12-man raids with prioritized buff/debuff tracking and integrated UI legend.
 --.version 1.0
+--.description Advanced 4x3 cubic healer frames for 12-man raids.
+
+local ScriptName = "SotA Healer Frames";
+local Version = "1.0";
+local CreatorName = "Ludiusvox";
+local Description = "Advanced 4x3 cubic healer frames for 12-man raids.";
 
 -- SotaHealerFrames.lua
 -- Advanced Healer Interface for Shroud of the Avatar
