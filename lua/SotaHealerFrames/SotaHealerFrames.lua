@@ -43,7 +43,9 @@ local config = {
         douse = "#FF7F7F",
         blind = "#FFFF00",
         debuffGeneral = "#8B0000",
-        healingGrace = "#90EE90"
+        healingGrace = "#90EE90",
+        valiantWarden = "#660000",  -- Deep Dark Red
+        purifyBurst = "#E0FFFF"     -- Light Cyan/White
     }
 }
 
@@ -64,6 +66,9 @@ local BUFF_META = {
     ["Dig In"] = { duration = 20, color = config.colors.digIn },              -- Combat Skill (No Phrase)
     ["Torpor"] = { duration = 30, color = config.colors.torpor, phrase = "Asen-Terra" },
     ["Healing Grace"] = { duration = 20, color = config.colors.healingGrace, phrase = "In-Reno" },
+    ["Douse"] = { duration = 30, color = config.colors.soothingRain },
+    ["Purify Burst"] = { duration = 20, color = config.colors.purifyBurst },
+    ["Valiant Warden"] = { duration = 30, color = config.colors.valiantWarden },
     -- Debuffs (Tracked via Chat)
     ["Burning"] = { duration = 15, isDebuff = true, color = config.colors.douse },
     ["Fire Arrow"] = { duration = 10, isDebuff = true, color = config.colors.douse },
@@ -274,6 +279,15 @@ end
 
 -- [[ RENDERING LOGIC ]]
 
+local function HasBuff(member, searchName)
+    if not member or not member.buffs then return false end
+    searchName = searchName:lower()
+    for bName, _ in pairs(member.buffs) do
+        if bName:lower():find(searchName) then return true end
+    end
+    return false
+end
+
 function DrawRaidFrames()
     local cols = config.grid.cols
     local rows = config.grid.rows
@@ -343,27 +357,33 @@ function DrawRaidFrames()
 
             -- [[ BUFF INDICATORS ]]
 
-            -- Soothing Rain (Top Left)
-            if member.buffs["Soothing Rain"] and ShroudGUILabel then
+            -- Soothing Rain / Douse (Top Left)
+            if (HasBuff(member, "Soothing Rain") or HasBuff(member, "Douse")) and ShroudGUILabel then
                 local colorText = string.format("<color=%s>█</color>", config.colors.soothingRain)
                 ShroudGUILabel(x + 2, y + 2, 15, 15, colorText)
             end
 
-            -- Dig In (Silver - Top Right)
-            if member.buffs["Dig In"] and ShroudGUILabel then
-                local colorText = string.format("<color=%s>█</color>", config.colors.digIn)
+            -- Dig In / Knight's Grace (Silver/Gold - Top Right)
+            if (HasBuff(member, "Dig In") or HasBuff(member, "Knight's Grace") or HasBuff(member, "Knights Grace")) and ShroudGUILabel then
+                local isGrace = HasBuff(member, "Grace")
+                local color = isGrace and config.colors.knightsGrace or config.colors.digIn
+                local colorText = string.format("<color=%s>█</color>", color)
                 ShroudGUILabel(x + w - 15, y + 2, 15, 15, colorText)
             end
 
-            -- Torpor (Dark Green - Bottom Left)
-            if member.buffs["Torpor"] and ShroudGUILabel then
-                local colorText = string.format("<color=%s>█</color>", config.colors.torpor)
+            -- Torpor / Valiant Warden (Bottom Left)
+            if (HasBuff(member, "Torpor") or HasBuff(member, "Valiant Warden")) and ShroudGUILabel then
+                local isValiant = HasBuff(member, "Valiant")
+                local color = isValiant and config.colors.valiantWarden or config.colors.torpor
+                local colorText = string.format("<color=%s>█</color>", color)
                 ShroudGUILabel(x + 2, y + h - 15, 15, 15, colorText)
             end
 
-            -- Healing Grace (Light Green - Bottom Right)
-            if member.buffs["Healing Grace"] and ShroudGUILabel then
-                local colorText = string.format("<color=%s>█</color>", config.colors.healingGrace)
+            -- Healing Grace / Purify Burst (Bottom Right)
+            if (HasBuff(member, "Healing Grace") or HasBuff(member, "Purify Burst")) and ShroudGUILabel then
+                local isPurify = HasBuff(member, "Purify")
+                local color = isPurify and config.colors.purifyBurst or config.colors.healingGrace
+                local colorText = string.format("<color=%s>█</color>", color)
                 ShroudGUILabel(x + w - 15, y + h - 15, 15, 15, colorText)
             end
 
@@ -466,10 +486,10 @@ function DrawLegend()
     end
 
     -- Buff Section
-    drawEntry(0, config.colors.soothingRain, "Soothing Rain", "32s - Top Left")
-    drawEntry(1, config.colors.digIn, "Dig In", "Aura - Top Right")
+    drawEntry(0, config.colors.soothingRain, "Rain/Douse", "Blue - Top Left")
+    drawEntry(1, config.colors.digIn, "Dig In/Grace", "Silver/Gold - Top Right")
     drawEntry(2, config.colors.torpor, "Torpor", "Regen - Bottom Left")
-    drawEntry(3, config.colors.knightsGrace, "Knight's Grace", "Personal Highlight")
+    drawEntry(3, config.colors.valiantWarden, "Valiant Warden", "Dark Red - Bottom Left")
 
     -- Debuff Section
     if ShroudGUILabel then
@@ -479,8 +499,12 @@ function DrawLegend()
     drawEntry(6.4, config.colors.douse, "Fire Damage", "Light Red - Douse!")
     drawEntry(7.4, config.colors.debuffGeneral, "General Debuff", "Dark Red - CC/Other")
 
-    -- New entry for Healing Grace
+    -- New entries for Healing Grace and Purify Burst
     drawEntry(8.4, config.colors.healingGrace, "Healing Grace", "Light Green - Bottom Right")
+    drawEntry(9.4, config.colors.purifyBurst, "Purify Burst", "Cyan/White - Bottom Right")
+
+    -- Adjust Legend Height
+    legendH = 460
 end
 
 function DrawQuestTicker()
